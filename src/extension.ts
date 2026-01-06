@@ -86,8 +86,10 @@ async function getGeminiApiKey(
 
 function getGitDiff(): Promise<string> {
   return new Promise((resolve, reject) => {
-    exec("git diff --staged", { maxBuffer: 1024 * 1024 }, (err, stdout) => {
-      if (err) reject(err);
+    exec("git diff --cached", { maxBuffer: 1024 * 1024 }, (err, stdout) => {
+      if (err) {
+        reject(new Error("Failed to get staged changes"));
+      }
       resolve(stdout);
     });
   });
