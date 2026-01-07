@@ -1,6 +1,6 @@
 {
   "name": "commatCommit",
-  "displayName": "commat-commit",
+  "displayName": "Commat Commit",
   "description": "AI-powered commit generator using Gemini",
   "version": "0.0.1",
   "engines": {
