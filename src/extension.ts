@@ -1,21 +1,27 @@
 import * as vscode from "vscode";
 import { exec } from "child_process";
 
+/* ================= GLOBAL CONTEXT ================= */
+
+let extensionContext: vscode.ExtensionContext;
+
 /* ================= ACTIVATE ================= */
 
 export function activate(context: vscode.ExtensionContext) {
+  extensionContext = context;
+
   const command = vscode.commands.registerCommand(
     "commatCommit.generate",
     async () => {
       try {
-        const apiKey = await getGeminiApiKey(context);
+        const apiKey = await getGeminiApiKey();
         if (!apiKey) return;
 
         await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.SourceControl,
             title: "Commat Commit: Generating commit message…",
-            cancellable: false
+            cancellable: false,
           },
           async () => {
             const diff = await getGitDiff();
@@ -27,10 +33,10 @@ export function activate(context: vscode.ExtensionContext) {
               return;
             }
 
-            const commitMessage = await generateCommitMessage(apiKey, diff);
+            const rawMessage = await generateCommitMessage(apiKey, diff);
 
             const repo = getActiveRepository();
-            repo.inputBox.value = commitMessage;
+            repo.inputBox.value = rawMessage;
           }
         );
       } catch (err: any) {
@@ -44,16 +50,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(command);
 }
 
-
 export function deactivate() {}
 
 /* ================= HELPERS ================= */
 
-// 🔐 Gemini API Key (secure)
-async function getGeminiApiKey(
-  context: vscode.ExtensionContext
-): Promise<string | undefined> {
-  let apiKey = await context.secrets.get("geminiApiKey");
+// 🔐 Gemini API Key
+async function getGeminiApiKey(): Promise<string | undefined> {
+  let apiKey = await extensionContext.secrets.get("geminiApiKey");
 
   if (!apiKey) {
     apiKey = await vscode.window.showInputBox({
@@ -63,7 +66,7 @@ async function getGeminiApiKey(
     });
 
     if (apiKey) {
-      await context.secrets.store("geminiApiKey", apiKey);
+      await extensionContext.secrets.store("geminiApiKey", apiKey);
       vscode.window.showInformationMessage(
         "Gemini API Key saved securely"
       );
@@ -99,7 +102,7 @@ function getGitDiff(): Promise<string> {
   });
 }
 
-// 🤖 Gemini API call (FREE & FAST)
+// 🤖 Gemini API call
 async function generateCommitMessage(
   apiKey: string,
   diff: string
@@ -114,27 +117,85 @@ async function generateCommitMessage(
           {
             parts: [
               {
-                text: ` Generate a Conventional Commit message from this git diff.
+                text: `Generate a Conventional Commit message from this git diff.
+Answer with a single-line commit message, maximum 50 characters.
 Only output the commit message.
-${diff}
-                `,
+
+${diff}`,
               },
             ],
           },
         ],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 400,
-        }
+          maxOutputTokens: 500,
+        },
       }),
     }
   );
 
+  // 🔴 RATE LIMIT HANDLING
+  if (response.status === 429) {
+    const choice = await vscode.window.showErrorMessage(
+      "Gemini API rate limit exceeded for this API key.",
+      "Enter New API Key",
+      "Cancel"
+    );
+
+    if (choice === "Enter New API Key") {
+      const newKey = await promptNewGeminiApiKey();
+      if (!newKey) {
+        throw new Error("No API key provided");
+      }
+      // retry once
+      return generateCommitMessage(newKey, diff);
+    }
+
+    throw new Error("Gemini API rate limit exceeded");
+  }
+
+  if (!response.ok) {
+    throw new Error(`Gemini API error: ${response.status}`);
+  }
+
   const data: any = await response.json();
-  return data.candidates[0].content.parts[0].text.trim();
+
+  // ✅ ROBUST PARSING
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) {
+    console.error("Gemini raw response:", data);
+    throw new Error("Failed to generate commit message");
+  }
+
+  const text = parts
+    .map((p: any) => p?.text)
+    .filter(Boolean)
+    .join("")
+    .trim();
+
+  if (!text) {
+    throw new Error("Empty commit message from Gemini");
+  }
+
+  return text;
 }
 
-// 🔗 Native Git API (BUKAN SCM custom)
+// 🔑 Prompt new API key (rate limit)
+async function promptNewGeminiApiKey(): Promise<string | undefined> {
+  const newKey = await vscode.window.showInputBox({
+    prompt: "Gemini API key terkena limit. Masukkan API key baru:",
+    password: true,
+    ignoreFocusOut: true,
+  });
+
+  if (newKey) {
+    await extensionContext.secrets.store("geminiApiKey", newKey);
+  }
+
+  return newKey;
+}
+
+// 🔗 Native Git API
 function getGitApi(): any {
   const ext = vscode.extensions.getExtension("vscode.git");
   if (!ext) {
