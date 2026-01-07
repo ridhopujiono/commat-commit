@@ -14,7 +14,7 @@
       {
         "command": "commatCommit.generate",
         "title": "Commat Commit: Generate Commit Message",
-        "icon": "$(sparkle)"
+        "icon": "$(wand)"
       }
     ],
     "menus": {
