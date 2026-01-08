@@ -2,6 +2,7 @@
   "name": "commatCommit",
   "displayName": "Commat Commit",
   "description": "AI-powered commit generator using Gemini",
+  "publisher": "BlangkonDepeloper",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.107.0"
