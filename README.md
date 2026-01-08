@@ -1,6 +1,6 @@
 # commatCommit
 
-https://raw.githubusercontent.com/ridhopujiono/commat-commit/refs/heads/main/icon.png
+![alt-image](https://raw.githubusercontent.com/ridhopujiono/commat-commit/refs/heads/main/icon.png)
 
 Commat Commit is a VS Code extension that helps you generate clean, concise git commit messages automatically using Google Gemini.
 
